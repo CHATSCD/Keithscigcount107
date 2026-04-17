@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<title>Keith's Cig Inventory · Storage=Ctns / Shelf=Packs</title>
+<title>Keith's Cig Inventory · Edit SKU by Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -145,11 +146,47 @@
   .btn-navy:hover { background: var(--navy-mid); }
   .btn-outline { background: white; color: var(--navy); border: 2px solid var(--navy); }
   .btn-outline:hover { background: var(--navy); color: white; }
+  .btn-camera { background: #2c3e66; color: white; }
+  .btn-camera:hover { background: #1e2a4a; }
   .date-stamp {
     font-size: 11px;
     opacity: 0.6;
     font-family: 'DM Mono', monospace;
     margin-left: auto;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-content {
+    background: white;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 24px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+  }
+  .modal-content #qr-reader { width: 100%; min-height: 300px; }
+  .close-modal {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--red);
+  }
+  .scanner-status {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
   }
 
   .main {
@@ -261,6 +298,18 @@
     padding: 2px 6px;
     border-radius: 4px;
   }
+  .edit-sku-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 6px;
+    color: var(--blue);
+    vertical-align: middle;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .edit-sku-btn:hover { background: var(--tan); color: var(--red); }
   .tier-badge {
     display: inline-block;
     padding: 2px 7px;
@@ -311,19 +360,9 @@
     border-radius: 8px;
     background: var(--tan);
   }
-  .edit-sku-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
-    margin-left: 6px;
-    color: var(--blue);
-    vertical-align: middle;
-  }
-  .edit-sku-btn:hover { color: var(--red); }
 
   @media print {
-    header, .controls, .add-form-wrap, .btn { display: none; }
+    header, .controls, .add-form-wrap, .btn, .modal { display: none; }
     .inventory-scroll { overflow: visible !important; max-height: none; }
     .brand-section.collapsed .items-table { display: table; }
   }
@@ -335,7 +374,7 @@
   <div class="header-inner">
     <div>
       <div class="header-title">🚬 Keith's Cig Inventory</div>
-      <div class="header-sub">Storage = Cartons · Shelf = Packs · Keith's #107</div>
+      <div class="header-sub">Storage = Cartons · Shelf = Packs · Click ✏️ to edit SKU by scanner</div>
     </div>
     <div class="header-stats">
       <div class="hstat"><span class="hstat-val" id="hdr-total-packs">0</span><span class="hstat-lbl">Total Packs</span></div>
@@ -351,11 +390,22 @@
   <select id="filter-tier" onchange="filterItems()"><option value="">All Tiers</option><option value="PREMIUM">Premium</option><option value="GENERIC">Generic</option><option value="SUB GENERIC">Sub Generic</option></select>
   
   <input type="text" id="barcode-scan" class="scan-input" placeholder="🔍 Jump to SKU" autocomplete="off">
+  <button class="btn btn-camera" id="cameraScanBtn">📷 Scan to Find</button>
   
   <button class="btn btn-red" onclick="toggleAddForm()">+ Add Item</button>
   <button class="btn btn-navy" onclick="printInventory()">🖨 Print</button>
   <button class="btn btn-outline" onclick="resetAll()">Reset Counts</button>
   <span class="date-stamp" id="date-display"></span>
+</div>
+
+<div id="scannerModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal" onclick="closeScanner()">&times;</span>
+    <h3 style="margin-bottom: 12px;" id="scannerModalTitle">📸 Scan Barcode</h3>
+    <div id="qr-reader" style="width: 100%;"></div>
+    <div class="scanner-status" id="scannerStatus">Align barcode with camera</div>
+    <button class="btn btn-outline" style="margin-top: 12px;" onclick="closeScanner()">Close</button>
+  </div>
 </div>
 
 <div class="main">
@@ -387,74 +437,34 @@
 </div>
 
 <script>
-// ========== FULL INVENTORY DATA (packs internal, cartons displayed) ==========
+// ========== INVENTORY DATA ==========
 let inventory = [
   { id:1,  brand:'AM SPIRIT', name:'AMER SPIRIT BX CELADON', sku:'10631461', tier:'SUB GENERIC', storage:10, shelf:10 },
   { id:2,  brand:'AM SPIRIT', name:'AMER SPIRIT BX KNG BLUE', sku:'10631454', tier:'SUB GENERIC', storage:10, shelf:10 },
   { id:3,  brand:'AM SPIRIT', name:'AMER SPIRIT BX KNG ORANGE', sku:'10631485', tier:'SUB GENERIC', storage:10, shelf:0 },
   { id:4,  brand:'AM SPIRIT', name:'AMER SPIRIT BX MLW YELLOW', sku:'10631478', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:5,  brand:'AM SPIRIT', name:'AMER SPIRIT BX US DRKYBLUE', sku:'10631447', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:6,  brand:'AM SPIRIT', name:'AMER SPIRIT BX PERIO BLCK', sku:'10631553', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:7,  brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC GOLD', sku:'10631591', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:8,  brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC GRNDK', sku:'10631423', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:9,  brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC GRNT', sku:'10631430', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:10, brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC TURQU', sku:'10631355', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:11, brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC SKY', sku:'10631394', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:12, brand:'B&H MERIT', name:'B&H 100 MTH BOX FSC', sku:'10410387', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:13, brand:'B&H MERIT', name:'B&H LUXURY MERIT 100BOXFSC', sku:'10410165', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:14, brand:'BASIC', name:'BASIC BOX 100 BLUE', sku:'10125007', tier:'GENERIC', storage:10, shelf:0 },
-  { id:15, brand:'BASIC', name:'BASIC BOX 100 FSC', sku:'10125076', tier:'GENERIC', storage:10, shelf:0 },
-  { id:16, brand:'CAMEL', name:'CAMEL CRUSH RICH BOX FSC', sku:'10380802', tier:'PREMIUM', storage:200, shelf:50 },
-  { id:17, brand:'CAMEL', name:'CAMEL CRUSH SILVER MEN BX', sku:'10380789', tier:'PREMIUM', storage:70, shelf:20 },
-  { id:18, brand:'CAMEL', name:'CAMEL CRUSH SMOOTH MTH BX', sku:'10380758', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:19, brand:'CAMEL', name:'CAMEL GOLD BOX K', sku:'10382028', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:20, brand:'CAMEL', name:'CAMEL ROYAL BOX K', sku:'10382042', tier:'PREMIUM', storage:20, shelf:10 },
-  { id:21, brand:'CAMEL', name:'CAMEL CRUSH BOX FSC', sku:'10380796', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:22, brand:'DORAL', name:'DORAL MEN GOLD LT BX 100FSC', sku:'10120781', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:23, brand:'DORAL', name:'DORAL SILVER UL BX KS FSC', sku:'10120798', tier:'SUB GENERIC', storage:10, shelf:10 },
-  { id:24, brand:'KOOL', name:'KOOL KING BOX', sku:'10358832', tier:'PREMIUM', storage:80, shelf:90 },
-  { id:25, brand:'KOOL', name:'KOOL BOX BLUE', sku:'10358849', tier:'PREMIUM', storage:60, shelf:60 },
-  { id:26, brand:'KOOL', name:'KOOL KING SP', sku:'10387856', tier:'PREMIUM', storage:20, shelf:30 },
-  { id:27, brand:'KOOL', name:'KOOL 100 BOX', sku:'10387849', tier:'PREMIUM', storage:20, shelf:30 },
-  { id:28, brand:'L&M', name:'L&M BLUE KING 100S BOX FSC', sku:'10125569', tier:'PREMIUM', storage:10, shelf:0 },
-  { id:29, brand:'L&M', name:'L&M BOLD KING BOX FSC', sku:'10120552', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:30, brand:'LUCKY STRIKE', name:'LUCKY STRIKE ACTIVATE GRN', sku:'10388556', tier:'GENERIC', storage:70, shelf:10 },
-  { id:31, brand:'LUCKY STRIKE', name:'LUCKY STRIKE ACTIVATE BLU', sku:'10125274', tier:'GENERIC', storage:50, shelf:20 },
-  { id:32, brand:'LUCKY STRIKE', name:'LUCKY STRIKE GOLD 100 BOX', sku:'10388518', tier:'GENERIC', storage:30, shelf:40 },
-  { id:33, brand:'LUCKY STRIKE', name:'LUCKY STRIKE RED BOX', sku:'10388501', tier:'GENERIC', storage:40, shelf:20 },
-  { id:34, brand:'MARLBORO', name:'MARLBORO MEN GOLD KSBXFSC', sku:'10383438', tier:'PREMIUM', storage:30, shelf:30 },
-  { id:35, brand:'MARLBORO', name:'MARLBORO MEN SILV KSBXFSC', sku:'10383784', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:36, brand:'MARLBORO', name:'MARLBORO MEN GOLD 100 BX', sku:'10413807', tier:'PREMIUM', storage:30, shelf:40 },
-  { id:37, brand:'MARLBORO', name:'MARLBORO MEN SMOOTH BX', sku:'10383636', tier:'PREMIUM', storage:10, shelf:20 },
-  { id:38, brand:'MARLBORO', name:'MARLBORO MEN MENTH ICE BX', sku:'10383445', tier:'PREMIUM', storage:20, shelf:40 },
-  { id:39, brand:'MARLBORO', name:'MARLBORO MEN ICE BOX', sku:'10383599', tier:'PREMIUM', storage:40, shelf:50 },
-  { id:40, brand:'MARLBORO', name:'MARLBORO GOLD KING BOX FSC', sku:'10383597', tier:'PREMIUM', storage:20, shelf:30 },
-  { id:41, brand:'MARLBORO', name:'MARLBORO GOLD 100S BOX FSC', sku:'10383537', tier:'PREMIUM', storage:10, shelf:50 },
-  { id:42, brand:'MARLBORO', name:'MARLBORO SILVER BX KS FSC', sku:'10383483', tier:'PREMIUM', storage:30, shelf:70 },
-  { id:43, brand:'MARLBORO', name:'MARLBORO BLACK SP BL BOX', sku:'10383674', tier:'PREMIUM', storage:30, shelf:30 },
-  { id:44, brand:'MAVERICK', name:'MAVERICK GOLD 100 BOX', sku:'10387924', tier:'GENERIC', storage:20, shelf:10 },
-  { id:45, brand:'MAVERICK', name:'MAVERICK RED K BOX', sku:'10418390', tier:'GENERIC', storage:20, shelf:20 },
-  { id:46, brand:'MISTY', name:'MISTY BLUE BOX 120 LT FSC', sku:'10129760', tier:'GENERIC', storage:10, shelf:0 },
-  { id:47, brand:'NEWPORT', name:'NEWPORT BOX 100S FSC', sku:'10383933', tier:'PREMIUM', storage:20, shelf:50 },
-  { id:48, brand:'NEWPORT', name:'NEWPORT KINGS BOX FSC', sku:'10383957', tier:'PREMIUM', storage:10, shelf:30 },
-  { id:49, brand:'NEWPORT', name:'NEWPORT KINGS SOFT FSC', sku:'10383957', tier:'PREMIUM', storage:10, shelf:40 },
-  { id:50, brand:'NEWPORT', name:'NEWPORT MEN GOLD BOX FSC', sku:'10383940', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:51, brand:'NEWPORT', name:'NEWPORT NONMENTHL GL BX', sku:'10414231', tier:'PREMIUM', storage:20, shelf:20 },
-  { id:52, brand:'PALL MALL', name:'PALL MEN 100 BOX-FSC', sku:'10384459', tier:'GENERIC', storage:10, shelf:20 },
-  { id:53, brand:'PALL MALL', name:'PALL MALL SELECT BX BLUE', sku:'10677025', tier:'GENERIC', storage:30, shelf:50 },
-  { id:54, brand:'PALL MALL', name:'PALL MALL SELECT BX RED', sku:'10677032', tier:'GENERIC', storage:20, shelf:30 },
-  { id:55, brand:'PARLIAMENT', name:'PARLIAMENT WHITE 100 BOX', sku:'10414699', tier:'PREMIUM', storage:10, shelf:0 },
-  { id:56, brand:'SALEM', name:'SALEM GOLD KING BOX', sku:'10387894', tier:'PREMIUM', storage:10, shelf:10 },
-  { id:57, brand:'VA SLIM', name:'VA SLIM GOLD 100 BOX FSC', sku:'10417188', tier:'PREMIUM', storage:10, shelf:0 },
-  { id:58, brand:'WINSTON', name:'WINSTON SELECT KING GLD', sku:'10397728', tier:'PREMIUM', storage:30, shelf:20 },
-  { id:59, brand:'WINSTON', name:'WINSTON SELECT KING RED', sku:'10418345', tier:'PREMIUM', storage:20, shelf:10 },
-  { id:60, brand:'WINSTON', name:'WINSTON BOX KING BLACK', sku:'10388764', tier:'PREMIUM', storage:20, shelf:10 },
-  { id:61, brand:'WINSTON', name:'WINSTON BOX KING GOLD', sku:'10388771', tier:'PREMIUM', storage:20, shelf:10 },
-  { id:62, brand:'RYO/PAPERS', name:'EZ WIDER DOUBLE WIDE', sku:'12331802', tier:'PREMIUM', storage:10, shelf:10 },
+  { id:5,  brand:'AM SPIRIT', name:'AMER SPIRIT ORGANIC GOLD', sku:'10631591', tier:'SUB GENERIC', storage:10, shelf:10 },
+  { id:6,  brand:'CAMEL', name:'CAMEL CRUSH RICH BOX FSC', sku:'10380802', tier:'PREMIUM', storage:200, shelf:50 },
+  { id:7,  brand:'CAMEL', name:'CAMEL CRUSH SILVER MEN BX', sku:'10380789', tier:'PREMIUM', storage:70, shelf:20 },
+  { id:8,  brand:'CAMEL', name:'CAMEL GOLD BOX K', sku:'10382028', tier:'PREMIUM', storage:10, shelf:10 },
+  { id:9,  brand:'CAMEL', name:'CAMEL ROYAL BOX K', sku:'10382042', tier:'PREMIUM', storage:20, shelf:10 },
+  { id:10, brand:'KOOL', name:'KOOL KING BOX', sku:'10358832', tier:'PREMIUM', storage:80, shelf:90 },
+  { id:11, brand:'KOOL', name:'KOOL BOX BLUE', sku:'10358849', tier:'PREMIUM', storage:60, shelf:60 },
+  { id:12, brand:'LUCKY STRIKE', name:'LUCKY STRIKE ACTIVATE GRN', sku:'10388556', tier:'GENERIC', storage:70, shelf:10 },
+  { id:13, brand:'LUCKY STRIKE', name:'LUCKY STRIKE RED BOX', sku:'10388501', tier:'GENERIC', storage:40, shelf:20 },
+  { id:14, brand:'MARLBORO', name:'MARLBORO MEN GOLD KSBXFSC', sku:'10383438', tier:'PREMIUM', storage:30, shelf:30 },
+  { id:15, brand:'MARLBORO', name:'MARLBORO MEN GOLD 100 BX', sku:'10413807', tier:'PREMIUM', storage:30, shelf:40 },
+  { id:16, brand:'MARLBORO', name:'MARLBORO GOLD KING BOX FSC', sku:'10383597', tier:'PREMIUM', storage:20, shelf:30 },
+  { id:17, brand:'MARLBORO', name:'MARLBORO SILVER BX KS FSC', sku:'10383483', tier:'PREMIUM', storage:30, shelf:70 },
+  { id:18, brand:'NEWPORT', name:'NEWPORT BOX 100S FSC', sku:'10383933', tier:'PREMIUM', storage:20, shelf:50 },
+  { id:19, brand:'NEWPORT', name:'NEWPORT KINGS BOX FSC', sku:'10383957', tier:'PREMIUM', storage:10, shelf:30 },
+  { id:20, brand:'NEWPORT', name:'NEWPORT NONMENTHL GL BX', sku:'10414231', tier:'PREMIUM', storage:20, shelf:20 },
+  { id:21, brand:'PALL MALL', name:'PALL MALL SELECT BX BLUE', sku:'10677025', tier:'GENERIC', storage:30, shelf:50 },
+  { id:22, brand:'WINSTON', name:'WINSTON SELECT KING GLD', sku:'10397728', tier:'PREMIUM', storage:30, shelf:20 },
+  { id:23, brand:'WINSTON', name:'WINSTON SELECT KING RED', sku:'10418345', tier:'PREMIUM', storage:20, shelf:10 },
 ];
-let nextId = 63;
+let nextId = 24;
 
-// Helper functions
 function totalPacks(item) { return (item.storage || 0) + (item.shelf || 0); }
 function packsToCartons(packs) { return (packs / 10).toFixed(1); }
 function tierClass(t) {
@@ -464,7 +474,6 @@ function tierClass(t) {
 }
 function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m; }); }
 
-// Render inventory
 function renderInventory() {
   const search = document.getElementById('search').value.toLowerCase();
   const brandFilter = document.getElementById('filter-brand').value;
@@ -496,7 +505,11 @@ function renderInventory() {
       const storageCartons = (item.storage / 10).toFixed(1);
       return `
         <tr data-sku="${item.sku}" data-itemid="${item.id}">
-          <td><span class="item-name">${escapeHtml(item.name)}</span><div><span class="item-sku">${escapeHtml(item.sku)}</span></div></td>
+          <td>
+            <span class="item-name">${escapeHtml(item.name)}</span>
+            <div><span class="item-sku">${escapeHtml(item.sku)}</span>
+            <button class="edit-sku-btn" onclick="editSku(${item.id})" title="Scan new barcode to update SKU">✏️ Edit SKU</button></div>
+           </td>
           <td><span class="tier-badge ${tierClass(item.tier)}">${item.tier}</span></td>
           <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Ctns</span><input type="number" class="storage-input" min="0" step="1" value="${storageCartons}" onchange="updateStorageCartons(${item.id}, this.value)" style="border-color:#1e4080;"></div><div class="count-row" style="font-size:9px;">= ${item.storage} packs</div></div></td>
           <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Packs</span><input type="number" class="shelf-input" min="0" step="1" value="${item.shelf}" onchange="updateShelfPacks(${item.id}, this.value)" style="border-color:#c0392b;"></div><div class="count-row" style="font-size:9px;">= ${packsToCartons(item.shelf)} ctns</div></div></td>
@@ -529,28 +542,16 @@ function renderInventory() {
 
 function updateStorageCartons(id, cartonVal) {
   const item = inventory.find(i => i.id === id);
-  if (item) {
-    const cartons = parseInt(cartonVal) || 0;
-    item.storage = cartons * 10;
-    updateSummary();
-    renderInventory();
-  }
+  if (item) { item.storage = (parseInt(cartonVal) || 0) * 10; updateSummary(); renderInventory(); }
 }
-
 function updateShelfPacks(id, packVal) {
   const item = inventory.find(i => i.id === id);
-  if (item) {
-    item.shelf = parseInt(packVal) || 0;
-    updateSummary();
-    renderInventory();
-  }
+  if (item) { item.shelf = parseInt(packVal) || 0; updateSummary(); renderInventory(); }
 }
-
 function updateSummary() {
   const totalPacksSum = inventory.reduce((s, i) => s + totalPacks(i), 0);
   const storagePacks = inventory.reduce((s, i) => s + (i.storage || 0), 0);
   const shelfPacks = inventory.reduce((s, i) => s + (i.shelf || 0), 0);
-  
   document.getElementById('sum-total-packs').textContent = totalPacksSum;
   document.getElementById('sum-total-ctns').textContent = (totalPacksSum/10).toFixed(1);
   document.getElementById('sum-storage-packs').textContent = storagePacks;
@@ -561,7 +562,6 @@ function updateSummary() {
   document.getElementById('hdr-total-ctns').textContent = (totalPacksSum/10).toFixed(1);
   document.getElementById('hdr-items').textContent = inventory.length;
 }
-
 function updateBrandFilter() {
   const sel = document.getElementById('filter-brand');
   const cur = sel.value;
@@ -569,7 +569,6 @@ function updateBrandFilter() {
   sel.innerHTML = '<option value="">All Brands</option>' + brands.map(b => `<option value="${b}" ${b===cur?'selected':''}>${b}</option>`).join('');
   document.getElementById('brand-list').innerHTML = brands.map(b => `<option value="${b}">`).join('');
 }
-
 function addItem() {
   const brand = document.getElementById('f-brand').value.trim().toUpperCase();
   const name = document.getElementById('f-name').value.trim().toUpperCase();
@@ -581,34 +580,81 @@ function addItem() {
   inventory.push({ id: nextId++, brand, name, sku, tier, storage: storageCartons * 10, shelf: shelfPacks });
   document.getElementById('f-brand').value = ''; document.getElementById('f-name').value = ''; document.getElementById('f-sku').value = '';
   document.getElementById('f-storage').value = '0'; document.getElementById('f-shelf').value = '0';
-  toggleAddForm();
-  updateBrandFilter();
-  renderInventory();
-  updateSummary();
+  toggleAddForm(); updateBrandFilter(); renderInventory(); updateSummary();
 }
-
-function removeItem(id) { 
-  if (confirm('Remove this item?')) { 
-    inventory = inventory.filter(i => i.id !== id); 
-    updateBrandFilter();
-    renderInventory(); 
-    updateSummary(); 
-  } 
-}
-
+function removeItem(id) { if (confirm('Remove this item?')) { inventory = inventory.filter(i => i.id !== id); updateBrandFilter(); renderInventory(); updateSummary(); } }
 function filterItems() { renderInventory(); }
-function resetAll() { 
-  if (confirm('Reset ALL counts to zero?')) { 
-    inventory.forEach(i => { i.storage = 0; i.shelf = 0; }); 
-    renderInventory(); 
-    updateSummary(); 
-  } 
-}
+function resetAll() { if (confirm('Reset ALL counts to zero?')) { inventory.forEach(i => { i.storage = 0; i.shelf = 0; }); renderInventory(); updateSummary(); } }
 function printInventory() { window.print(); }
 function toggleAddForm() { document.getElementById('add-form').classList.toggle('open'); }
 function toggleBrand(header) { header.closest('.brand-section').classList.toggle('collapsed'); }
 
-// Jump to SKU from manual input
+// ========== SCANNER FUNCTIONS ==========
+let pendingEditItemId = null;
+let html5QrCode = null;
+
+function editSku(itemId) {
+  pendingEditItemId = itemId;
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan NEW Barcode for this item';
+  openScannerForEdit();
+}
+
+function openScannerForEdit() {
+  const modal = document.getElementById('scannerModal');
+  modal.style.display = 'flex';
+  const readerElement = document.getElementById('qr-reader');
+  if (readerElement) readerElement.innerHTML = '';
+  if (typeof Html5Qrcode !== 'undefined') {
+    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, (decodedText) => {
+      if (pendingEditItemId !== null) {
+        const item = inventory.find(i => i.id === pendingEditItemId);
+        if (item) {
+          item.sku = decodedText;
+          renderInventory();
+          updateBrandFilter();
+          alert(`SKU updated to ${decodedText}`);
+        }
+        pendingEditItemId = null;
+      }
+      closeScanner();
+    }, (errorMessage) => { console.log("scan error"); });
+  } else {
+    alert("Scanner library loading... Please refresh and try again.");
+    closeScanner();
+  }
+}
+
+function openScannerToFind() {
+  pendingEditItemId = null;
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan Barcode to Find Item';
+  const modal = document.getElementById('scannerModal');
+  modal.style.display = 'flex';
+  const readerElement = document.getElementById('qr-reader');
+  if (readerElement) readerElement.innerHTML = '';
+  if (typeof Html5Qrcode !== 'undefined') {
+    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, (decodedText) => {
+      jumpToSku(decodedText);
+      closeScanner();
+    }, (errorMessage) => {});
+  } else {
+    alert("Scanner library loading... Please refresh.");
+    closeScanner();
+  }
+}
+
+function closeScanner() {
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().then(() => { document.getElementById('scannerModal').style.display = 'none'; }).catch(()=>{});
+  } else {
+    document.getElementById('scannerModal').style.display = 'none';
+  }
+  pendingEditItemId = null;
+}
+
 function jumpToSku(scannedSku) {
   if (!scannedSku) return;
   const match = inventory.find(item => item.sku === scannedSku);
@@ -623,14 +669,11 @@ function jumpToSku(scannedSku) {
   }
 }
 
-// Manual SKU entry
+// Manual SKU jump
 document.getElementById('barcode-scan').addEventListener('keypress', (e) => { 
-  if(e.key === 'Enter') { 
-    e.preventDefault(); 
-    jumpToSku(e.target.value.trim()); 
-    e.target.value = ''; 
-  } 
+  if(e.key === 'Enter') { e.preventDefault(); jumpToSku(e.target.value.trim()); e.target.value = ''; } 
 });
+document.getElementById('cameraScanBtn').addEventListener('click', openScannerToFind);
 
 // Initialize
 function init() {
@@ -639,7 +682,6 @@ function init() {
   updateSummary();
   document.getElementById('date-display').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
 }
-
 init();
 </script>
 </body>
