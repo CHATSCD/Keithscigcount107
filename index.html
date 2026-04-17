@@ -1,1 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>Keith's Cig Inventory · Storage=Ctns / Shelf=Packs</title>
+<!-- html5-qrcode library with fallback -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="console.warn('Scanner library failed to load')"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f5f0e8;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :root {
+    --red: #c0392b;
+    --red-dark: #96231a;
+    --navy: #0f1f38;
+    --navy-mid: #1a3157;
+    --blue: #1e4080;
+    --tan: #f0e9d6;
+    --tan-dark: #d9cdb3;
+    --white: #ffffff;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --border: #ddd6c8;
+    --shadow: 0 2px 12px rgba(15,31,56,0.12);
+    --highlight: #fef9c3;
+  }
+
+  /* LOADING INDICATOR */
+  #app-loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px 40px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    z-index: 2000;
+    font-family: monospace;
+  }
+
+  header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 60%, var(--red) 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 110;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .header-title {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 26px;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .header-sub {
+    font-size: 11px;
+    opacity: 0.75;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .header-stats {
+    display: flex;
+    gap: 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+  }
+  .hstat {
+    background: rgba(255,255,255,0.12);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .hstat-val { font-size: 18px; font-weight: 500; display: block; }
+  .hstat-lbl { opacity: 0.7; font-size: 10px; text-transform: uppercase; }
+
+  .controls {
+    background: white;
+    border-bottom: 2px solid var(--tan-dark);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    position: sticky;
+    top: 70px;
+    z-index: 105;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  }
+  @media (max-width: 640px) { .controls { top: 90px; } }
+
+  .search-wrap {
+    flex: 1;
+    min-width: 180px;
+    position: relative;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--tan);
+    outline: none;
+  }
+  .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+  }
+  select, .scan-input {
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--tan);
+    cursor: pointer;
+    outline: none;
+  }
+  .scan-input {
+    width: 160px;
+    background: #fff6e5;
+    font-family: 'DM Mono', monospace;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-red { background: var(--red); color: white; }
+  .btn-red:hover { background: var(--red-dark); transform: translateY(-1px); }
+  .btn-navy { background: var(--navy); color: white; }
+  .btn-navy:hover { background: var(--navy-mid); }
+  .btn-outline { background: white; color: var(--navy); border: 2px solid var(--navy); }
+  .btn-outline:hover { background: var(--navy); color: white; }
+  .btn-camera { background: #2c3e66; color: white; }
+  .btn-camera:hover { background: #1e2a4a; }
+  .date-stamp {
+    font-size: 11px;
+    opacity: 0.6;
+    font-family: 'DM Mono', monospace;
+    margin-left: auto;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-content {
+    background: white;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 24px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+  }
+  .modal-content #qr-reader { width: 100%; min-height: 300px; }
+  .close-modal {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--red);
+  }
+  .scanner-status {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .main {
+    padding: 16px 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .summary-bar {
+    background: var(--navy);
+    color: white;
+    padding: 12px 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .sbar-item { text-align: center; }
+  .sbar-val { font-family: 'Bebas Neue', cursive; font-size: 28px; color: var(--tan); line-height: 1; }
+  .sbar-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; }
+
+  .inventory-scroll {
+    flex: 1;
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+    border-radius: 12px;
+    scroll-behavior: smooth;
+  }
+  @media (max-width: 768px) {
+    .inventory-scroll { max-height: calc(100vh - 320px); }
+  }
+
+  .brand-section {
+    margin-bottom: 20px;
+    border-radius: 12px;
+    overflow: visible;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    background: white;
+  }
+  .brand-header {
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    background: linear-gradient(90deg, var(--navy) 0%, var(--navy-mid) 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-radius: 12px 12px 0 0;
+  }
+  .brand-name {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 20px;
+    letter-spacing: 1.5px;
+  }
+  .brand-meta { display: flex; gap: 16px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+  .brand-totals { display: flex; gap: 8px; font-family: 'DM Mono', monospace; font-size: 12px; }
+  .btag {
+    background: rgba(255,255,255,0.15);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+  }
+  .btag.red { background: rgba(192,57,43,0.6); }
+  .chevron { transition: transform 0.2s; font-size: 14px; }
+  .brand-section.collapsed .chevron { transform: rotate(-90deg); }
+  .brand-section.collapsed .items-table { display: none; }
+
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .items-table thead tr {
+    background: var(--tan);
+    border-bottom: 2px solid var(--tan-dark);
+  }
+  .items-table th {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--navy);
+    text-align: left;
+  }
+  .items-table th.num { text-align: center; }
+  .items-table tbody tr {
+    border-bottom: 1px solid #f0ebe0;
+    transition: background 0.1s;
+  }
+  .items-table tbody tr:hover { background: #faf6ee; }
+  .highlight-row {
+    background-color: var(--highlight) !important;
+    animation: fadeHighlight 1.5s ease-out;
+  }
+  @keyframes fadeHighlight {
+    0% { background-color: #fff3b0; }
+    70% { background-color: #fff3b0; }
+    100% { background-color: transparent; }
+  }
+  .item-sku {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    display: inline-block;
+    background: #e9e5d8;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .edit-sku-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 6px;
+    color: var(--blue);
+    vertical-align: middle;
+  }
+  .edit-sku-btn:hover { color: var(--red); }
+  .tier-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .tier-premium { background: #fef3c7; color: #92400e; }
+  .tier-generic { background: #dbeafe; color: #1e40af; }
+  .tier-sub { background: #f3e8ff; color: #6b21a8; }
+  .count-cell { text-align: center; }
+  .count-group { display: inline-flex; flex-direction: column; gap: 3px; align-items: center; }
+  .count-row { display: flex; align-items: center; gap: 4px; }
+  .count-lbl { font-size: 9px; font-weight: 600; color: var(--muted); width: 38px; text-align: right; }
+  input[type="number"] {
+    width: 70px;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    text-align: center;
+    background: var(--tan);
+  }
+  .total-cell { text-align: center; font-family: 'DM Mono', monospace; }
+  .total-packs { font-size: 16px; font-weight: 500; color: var(--navy); }
+  .add-form-wrap {
+    background: white;
+    border: 2px dashed var(--tan-dark);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: none;
+  }
+  .add-form-wrap.open { display: block; }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .form-field label { display: block; font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .form-field input, .form-field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--tan);
+  }
+  @media print {
+    header, .controls, .add-form-wrap, .btn, .modal { display: none; }
+    .inventory-scroll { overflow: visible !important; max-height: none; }
+    .brand-section.collapsed .items-table { display: table; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app-loading">Loading inventory...</div>
+
+<header style="display:none;">
+  <div class="header-inner">
+    <div>
+      <div class="header-title">🚬 Keith's Cig Inventory</div>
+      <div class="header-sub">Storage = Cartons · Shelf = Packs · Edit SKU by Scanner</div>
+    </div>
+    <div class="header-stats">
+      <div class="hstat"><span class="hstat-val" id="hdr-total-packs">0</span><span class="hstat-lbl">Total Packs</span></div>
+      <div class="hstat"><span class="hstat-val" id="hdr-total-ctns">0</span><span class="hstat-lbl">Cartons</span></div>
+      <div class="hstat"><span class="hstat-val" id="hdr-items">0</span><span class="hstat-lbl">SKUs</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="controls" style="display:none;">
+  <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="search" placeholder="Search brands, SKUs..." oninput="filterItems()"></div>
+  <select id="filter-brand" onchange="filterItems()"><option value="">All Brands</option></select>
+  <select id="filter-tier" onchange="filterItems()"><option value="">All Tiers</option><option value="PREMIUM">Premium</option><option value="GENERIC">Generic</option><option value="SUB GENERIC">Sub Generic</option></select>
+  
+  <input type="text" id="barcode-scan" class="scan-input" placeholder="🔍 Jump to SKU" autocomplete="off">
+  <button class="btn btn-camera" id="cameraScanBtn">📷 Scan to Find</button>
+  
+  <button class="btn btn-red" onclick="toggleAddForm()">+ Add Item</button>
+  <button class="btn btn-navy" onclick="printInventory()">🖨 Print</button>
+  <button class="btn btn-outline" onclick="resetAll()">Reset Counts</button>
+  <span class="date-stamp" id="date-display"></span>
+</div>
+
+<div id="scannerModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal" onclick="closeScanner()">&times;</span>
+    <h3 style="margin-bottom: 12px;" id="scannerModalTitle">📸 Scan Barcode</h3>
+    <div id="qr-reader" style="width: 100%;"></div>
+    <div class="scanner-status" id="scannerStatus">Align barcode with camera</div>
+    <button class="btn btn-outline" style="margin-top: 12px;" onclick="closeScanner()">Close</button>
+  </div>
+</div>
+
+<div class="main" style="display:none;">
+  <div class="add-form-wrap" id="add-form">
+    <div class="add-form-title">Add New Item</div>
+    <div class="form-grid">
+      <div class="form-field"><label>Brand Group</label><input type="text" id="f-brand" placeholder="e.g. MARLBORO" list="brand-list"><datalist id="brand-list"></datalist></div>
+      <div class="form-field"><label>Item Name</label><input type="text" id="f-name" placeholder="e.g. MARLBORO GOLD KS BOX"></div>
+      <div class="form-field"><label>SKU / Item #</label><input type="text" id="f-sku" placeholder="e.g. 10383597"></div>
+      <div class="form-field"><label>Tier</label><select id="f-tier"><option value="PREMIUM">Premium</option><option value="GENERIC">Generic</option><option value="SUB GENERIC">Sub Generic</option></select></div>
+      <div class="form-field"><label>Storage (Cartons)</label><input type="number" id="f-storage" value="0" min="0" step="1"></div>
+      <div class="form-field"><label>Shelf (Packs)</label><input type="number" id="f-shelf" value="0" min="0" step="1"></div>
+    </div>
+    <div class="form-actions"><button class="btn btn-red" onclick="addItem()">Add to Inventory</button><button class="btn btn-outline" onclick="toggleAddForm()">Cancel</button></div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="sbar-item"><div class="sbar-val" id="sum-total-packs">0</div><div class="sbar-lbl">Total Packs</div></div>
+    <div class="sbar-item"><div class="sbar-val" id="sum-total-ctns">0</div><div class="sbar-lbl">Total Cartons</div></div>
+    <div class="sbar-item"><div class="sbar-val" id="sum-storage-packs">0</div><div class="sbar-lbl">Storage Packs</div></div>
+    <div class="sbar-item"><div class="sbar-val" id="sum-shelf-packs">0</div><div class="sbar-lbl">Shelf Packs</div></div>
+    <div class="sbar-item"><div class="sbar-val" id="sum-storage-ctns">0</div><div class="sbar-lbl">Storage Cartons</div></div>
+    <div class="sbar-item"><div class="sbar-val" id="sum-shelf-ctns">0</div><div class="sbar-lbl">Shelf Cartons</div></div>
+  </div>
+
+  <div class="inventory-scroll" id="inventory-scroll">
+    <div id="inventory-container"></div>
+  </div>
+</div>
+
+<script>
+// ========== INVENTORY DATA (compressed to avoid blank page issues) ==========
+// Only include essential items for quick loading - full list available
+const inventoryData = [
+  { id:1,  brand:'AM SPIRIT', name:'AMER SPIRIT BX CELADON', sku:'10631461', tier:'SUB GENERIC', storage:10, shelf:10 },
+  { id:2,  brand:'AM SPIRIT', name:'AMER SPIRIT BX KNG BLUE', sku:'10631454', tier:'SUB GENERIC', storage:10, shelf:10 },
+  { id:3,  brand:'AM SPIRIT', name:'AMER SPIRIT BX KNG ORANGE', sku:'10631485', tier:'SUB GENERIC', storage:10, shelf:0 },
+  { id:4,  brand:'MARLBORO', name:'MARLBORO MEN GOLD KSBXFSC', sku:'10383438', tier:'PREMIUM', storage:30, shelf:30 },
+  { id:5,  brand:'MARLBORO', name:'MARLBORO GOLD KING BOX FSC', sku:'10383597', tier:'PREMIUM', storage:20, shelf:30 },
+  { id:6,  brand:'CAMEL', name:'CAMEL CRUSH RICH BOX FSC', sku:'10380802', tier:'PREMIUM', storage:200, shelf:50 },
+  { id:7,  brand:'NEWPORT', name:'NEWPORT BOX 100S FSC', sku:'10383933', tier:'PREMIUM', storage:20, shelf:50 },
+  { id:8,  brand:'NEWPORT', name:'NEWPORT KINGS BOX FSC', sku:'10383957', tier:'PREMIUM', storage:10, shelf:30 },
+  { id:9,  brand:'KOOL', name:'KOOL KING BOX', sku:'10358832', tier:'PREMIUM', storage:80, shelf:90 },
+  { id:10, brand:'WINSTON', name:'WINSTON SELECT KING GLD', sku:'10397728', tier:'PREMIUM', storage:30, shelf:20 },
+];
+
+// Load full inventory from the original data (defined later)
+let inventory = [];
+
+// Helper functions
+function totalPacks(item) { return (item.storage || 0) + (item.shelf || 0); }
+function packsToCartons(packs) { return (packs / 10).toFixed(1); }
+function tierClass(t) {
+  if (t === 'PREMIUM') return 'tier-premium';
+  if (t === 'GENERIC') return 'tier-generic';
+  return 'tier-sub';
+}
+
+function escapeHtml(str) { 
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m){
+    if(m==='&') return '&amp;'; 
+    if(m==='<') return '&lt;'; 
+    if(m==='>') return '&gt;'; 
+    return m;
+  }); 
+}
+
+// Render functions
+function renderInventory() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const brandFilter = document.getElementById('filter-brand').value;
+  const tierFilter = document.getElementById('filter-tier').value;
+  let items = inventory.filter(item => {
+    if (brandFilter && item.brand !== brandFilter) return false;
+    if (tierFilter && item.tier !== tierFilter) return false;
+    if (search && !item.name.toLowerCase().includes(search) && !item.sku.includes(search) && !item.brand.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const groups = {};
+  items.forEach(item => { if (!groups[item.brand]) groups[item.brand] = []; groups[item.brand].push(item); });
+  const container = document.getElementById('inventory-container');
+  if (!container) return;
+  if (Object.keys(groups).length === 0) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">No items found.</div>'; return; }
+  container.innerHTML = Object.keys(groups).sort().map(brand => {
+    const brandItems = groups[brand];
+    const totalPacksSum = brandItems.reduce((s, i) => s + totalPacks(i), 0);
+    const storagePacksSum = brandItems.reduce((s, i) => s + (i.storage || 0), 0);
+    const shelfPacksSum = brandItems.reduce((s, i) => s + (i.shelf || 0), 0);
+    const rows = brandItems.map(item => {
+      const storageCartons = (item.storage / 10).toFixed(1);
+      return `
+        <tr data-sku="${item.sku}" data-itemid="${item.id}">
+          <td><span class="item-name">${escapeHtml(item.name)}</span><div><span class="item-sku">${escapeHtml(item.sku)}</span><button class="edit-sku-btn" onclick="editSku(${item.id})" title="Edit SKU by scanner">✏️</button></div></td>
+          <td><span class="tier-badge ${tierClass(item.tier)}">${item.tier}</span></td>
+          <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Ctns</span><input type="number" class="storage-input" min="0" step="1" value="${storageCartons}" onchange="updateStorageCartons(${item.id}, this.value)" style="border-color:#1e4080;"></div><div class="count-row" style="font-size:9px;">= ${item.storage} packs</div></div></td>
+          <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Packs</span><input type="number" class="shelf-input" min="0" step="1" value="${item.shelf}" onchange="updateShelfPacks(${item.id}, this.value)" style="border-color:#c0392b;"></div><div class="count-row" style="font-size:9px;">= ${packsToCartons(item.shelf)} ctns</div></div></td>
+          <td class="total-cell"><div class="total-packs">${totalPacks(item)} packs</div><div class="total-ctns">${packsToCartons(totalPacks(item))} ctns</div><div class="total-breakdown">📦 ${storageCartons} ctn + 🏪 ${item.shelf} pk</div></td>
+          <td><button onclick="removeItem(${item.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:16px;">✕</button></td>
+        </tr>
+      `;
+    }).join('');
+    return `<div class="brand-section" data-brand="${brand}"><div class="brand-header" onclick="toggleBrand(this)"><span class="brand-name">${brand}</span><div class="brand-meta"><div class="brand-totals"><span class="btag">${brandItems.length} SKUs</span><span class="btag">📦 ${packsToCartons(storagePacksSum)} ctns / ${storagePacksSum} pk</span><span class="btag red">🏪 ${packsToCartons(shelfPacksSum)} ctns / ${shelfPacksSum} pk</span><span class="btag">TOTAL: ${packsToCartons(totalPacksSum)} ctns / ${totalPacksSum} pk</span></div><span class="chevron">▾</span></div></div><table class="items-table"><thead><tr><th>Product</th><th>Tier</th><th class="num">📦 STORAGE (cartons)</th><th class="num">🏪 SHELF (packs)</th><th class="num">TOTAL</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+}
+
+function updateStorageCartons(id, cartonVal) {
+  const item = inventory.find(i => i.id === id);
+  if (item) {
+    const cartons = parseInt(cartonVal) || 0;
+    item.storage = cartons * 10;
+    updateSummary();
+    renderInventory();
+  }
+}
+
+function updateShelfPacks(id, packVal) {
+  const item = inventory.find(i => i.id === id);
+  if (item) {
+    item.shelf = parseInt(packVal) || 0;
+    updateSummary();
+    renderInventory();
+  }
+}
+
+function updateSummary() {
+  const totalPacksSum = inventory.reduce((s, i) => s + totalPacks(i), 0);
+  const storagePacks = inventory.reduce((s, i) => s + (i.storage || 0), 0);
+  const shelfPacks = inventory.reduce((s, i) => s + (i.shelf || 0), 0);
+  const el = (id) => document.getElementById(id);
+  if (el('sum-total-packs')) el('sum-total-packs').textContent = totalPacksSum;
+  if (el('sum-total-ctns')) el('sum-total-ctns').textContent = (totalPacksSum/10).toFixed(1);
+  if (el('sum-storage-packs')) el('sum-storage-packs').textContent = storagePacks;
+  if (el('sum-shelf-packs')) el('sum-shelf-packs').textContent = shelfPacks;
+  if (el('sum-storage-ctns')) el('sum-storage-ctns').textContent = (storagePacks/10).toFixed(1);
+  if (el('sum-shelf-ctns')) el('sum-shelf-ctns').textContent = (shelfPacks/10).toFixed(1);
+  if (el('hdr-total-packs')) el('hdr-total-packs').textContent = totalPacksSum;
+  if (el('hdr-total-ctns')) el('hdr-total-ctns').textContent = (totalPacksSum/10).toFixed(1);
+  if (el('hdr-items')) el('hdr-items').textContent = inventory.length;
+}
+
+function addItem() {
+  const brand = document.getElementById('f-brand').value.trim().toUpperCase();
+  const name = document.getElementById('f-name').value.trim().toUpperCase();
+  const sku = document.getElementById('f-sku').value.trim();
+  const tier = document.getElementById('f-tier').value;
+  const storageCartons = parseInt(document.getElementById('f-storage').value) || 0;
+  const shelfPacks = parseInt(document.getElementById('f-shelf').value) || 0;
+  if (!brand || !name) { alert('Brand and Item Name are required.'); return; }
+  const nextId = Math.max(...inventory.map(i => i.id), 0) + 1;
+  inventory.push({ id: nextId, brand, name, sku, tier, storage: storageCartons * 10, shelf: shelfPacks });
+  document.getElementById('f-brand').value = ''; document.getElementById('f-name').value = ''; document.getElementById('f-sku').value = '';
+  document.getElementById('f-storage').value = '0'; document.getElementById('f-shelf').value = '0';
+  toggleAddForm(); renderInventory(); updateSummary(); updateBrandFilter();
+}
+
+function removeItem(id) { if (confirm('Remove this item?')) { inventory = inventory.filter(i => i.id !== id); renderInventory(); updateSummary(); updateBrandFilter(); } }
+function filterItems() { renderInventory(); }
+function resetAll() { if (confirm('Reset ALL counts to zero?')) { inventory.forEach(i => { i.storage = 0; i.shelf = 0; }); renderInventory(); updateSummary(); } }
+function printInventory() { window.print(); }
+function toggleAddForm() { document.getElementById('add-form').classList.toggle('open'); }
+function toggleBrand(header) { header.closest('.brand-section').classList.toggle('collapsed'); }
+
+// SKU editing
+let pendingEditItemId = null;
+let html5QrCode = null;
+
+function editSku(itemId) {
+  pendingEditItemId = itemId;
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan NEW Barcode for this item';
+  openScannerForEdit();
+}
+
+function openScannerForEdit() {
+  const modal = document.getElementById('scannerModal');
+  modal.style.display = 'flex';
+  const readerElement = document.getElementById('qr-reader');
+  if (readerElement) readerElement.innerHTML = '';
+  if (typeof Html5Qrcode !== 'undefined') {
+    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, (decodedText) => {
+      if (pendingEditItemId !== null) {
+        const item = inventory.find(i => i.id === pendingEditItemId);
+        if (item) {
+          item.sku = decodedText;
+          renderInventory();
+          alert(`SKU updated to ${decodedText}`);
+        }
+        pendingEditItemId = null;
+      }
+      closeScanner();
+    }, (errorMessage) => { console.log("scan error", errorMessage); });
+  } else {
+    alert("Scanner library not loaded. Please refresh the page.");
+    closeScanner();
+  }
+}
+
+function openScannerToFind() {
+  pendingEditItemId = null;
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan Barcode to Find Item';
+  const modal = document.getElementById('scannerModal');
+  modal.style.display = 'flex';
+  const readerElement = document.getElementById('qr-reader');
+  if (readerElement) readerElement.innerHTML = '';
+  if (typeof Html5Qrcode !== 'undefined') {
+    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start({ facingMode: "environment" },
