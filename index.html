@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-<title>Keith's Cig Inventory · Edit SKU by Scanner</title>
+<title>Keith's Cig Inventory · Barcode Scanner</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -160,21 +160,29 @@
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.9);
     z-index: 1000;
     justify-content: center;
     align-items: center;
   }
   .modal-content {
     background: white;
-    width: 90%;
-    max-width: 500px;
+    width: 95%;
+    max-width: 550px;
     border-radius: 24px;
     padding: 20px;
     text-align: center;
     position: relative;
   }
-  .modal-content #qr-reader { width: 100%; min-height: 300px; }
+  .modal-content #qr-reader {
+    width: 100%;
+    min-height: 350px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .modal-content #qr-reader__dashboard_section_csr {
+    display: none;
+  }
   .close-modal {
     position: absolute;
     top: 10px;
@@ -182,11 +190,35 @@
     font-size: 28px;
     cursor: pointer;
     color: var(--red);
+    background: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
   }
   .scanner-status {
     margin-top: 12px;
     font-size: 13px;
     color: var(--muted);
+    padding: 8px;
+    background: #f0f0f0;
+    border-radius: 8px;
+  }
+  .manual-sku-input {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border);
+  }
+  .manual-sku-input input {
+    width: 80%;
+    padding: 10px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 16px;
+    text-align: center;
   }
 
   .main {
@@ -289,27 +321,47 @@
     70% { background-color: #fff3b0; }
     100% { background-color: transparent; }
   }
+  
+  .product-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .item-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .sku-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .item-sku {
     font-family: 'DM Mono', monospace;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--muted);
-    display: inline-block;
     background: #e9e5d8;
-    padding: 2px 6px;
+    padding: 3px 8px;
     border-radius: 4px;
   }
   .edit-sku-btn {
-    background: none;
+    background: var(--blue);
     border: none;
     cursor: pointer;
-    font-size: 14px;
-    margin-left: 6px;
-    color: var(--blue);
-    vertical-align: middle;
-    padding: 2px 6px;
-    border-radius: 4px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 600;
+    transition: all 0.15s;
   }
-  .edit-sku-btn:hover { background: var(--tan); color: var(--red); }
+  .edit-sku-btn:hover {
+    background: var(--red);
+    transform: scale(1.02);
+  }
+  
   .tier-badge {
     display: inline-block;
     padding: 2px 7px;
@@ -321,6 +373,7 @@
   .tier-premium { background: #fef3c7; color: #92400e; }
   .tier-generic { background: #dbeafe; color: #1e40af; }
   .tier-sub { background: #f3e8ff; color: #6b21a8; }
+  
   .count-cell { text-align: center; }
   .count-group { display: inline-flex; flex-direction: column; gap: 3px; align-items: center; }
   .count-row { display: flex; align-items: center; gap: 4px; }
@@ -374,7 +427,7 @@
   <div class="header-inner">
     <div>
       <div class="header-title">🚬 Keith's Cig Inventory</div>
-      <div class="header-sub">Storage = Cartons · Shelf = Packs · Click ✏️ to edit SKU by scanner</div>
+      <div class="header-sub">Storage = Cartons · Shelf = Packs · Click "Edit SKU" to scan</div>
     </div>
     <div class="header-stats">
       <div class="hstat"><span class="hstat-val" id="hdr-total-packs">0</span><span class="hstat-lbl">Total Packs</span></div>
@@ -403,8 +456,12 @@
     <span class="close-modal" onclick="closeScanner()">&times;</span>
     <h3 style="margin-bottom: 12px;" id="scannerModalTitle">📸 Scan Barcode</h3>
     <div id="qr-reader" style="width: 100%;"></div>
-    <div class="scanner-status" id="scannerStatus">Align barcode with camera</div>
-    <button class="btn btn-outline" style="margin-top: 12px;" onclick="closeScanner()">Close</button>
+    <div class="scanner-status" id="scannerStatus">🔍 Point camera at barcode. Hold steady.</div>
+    <div class="manual-sku-input">
+      <p style="font-size: 12px; margin-bottom: 8px;">Or type SKU manually:</p>
+      <input type="text" id="manualSkuInput" placeholder="Enter SKU number" autocomplete="off">
+      <button class="btn btn-navy" style="margin-top: 8px;" onclick="submitManualSku()">Submit</button>
+    </div>
   </div>
 </div>
 
@@ -464,6 +521,9 @@ let inventory = [
   { id:23, brand:'WINSTON', name:'WINSTON SELECT KING RED', sku:'10418345', tier:'PREMIUM', storage:20, shelf:10 },
 ];
 let nextId = 24;
+let currentScannerAction = null; // 'find' or 'edit'
+let pendingEditItemId = null;
+let html5QrCode = null;
 
 function totalPacks(item) { return (item.storage || 0) + (item.shelf || 0); }
 function packsToCartons(packs) { return (packs / 10).toFixed(1); }
@@ -505,17 +565,19 @@ function renderInventory() {
       const storageCartons = (item.storage / 10).toFixed(1);
       return `
         <tr data-sku="${item.sku}" data-itemid="${item.id}">
-          <td>
-            <span class="item-name">${escapeHtml(item.name)}</span>
-            <div><span class="item-sku">${escapeHtml(item.sku)}</span>
-            <button class="edit-sku-btn" onclick="editSku(${item.id})" title="Scan new barcode to update SKU">✏️ Edit SKU</button></div>
+          <td class="product-cell">
+            <div class="item-name">${escapeHtml(item.name)}</div>
+            <div class="sku-row">
+              <span class="item-sku">${escapeHtml(item.sku)}</span>
+              <button class="edit-sku-btn" onclick="editSku(${item.id})">📷 Edit SKU</button>
+            </div>
            </td>
           <td><span class="tier-badge ${tierClass(item.tier)}">${item.tier}</span></td>
           <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Ctns</span><input type="number" class="storage-input" min="0" step="1" value="${storageCartons}" onchange="updateStorageCartons(${item.id}, this.value)" style="border-color:#1e4080;"></div><div class="count-row" style="font-size:9px;">= ${item.storage} packs</div></div></td>
           <td class="count-cell"><div class="count-group"><div class="count-row"><span class="count-lbl">Packs</span><input type="number" class="shelf-input" min="0" step="1" value="${item.shelf}" onchange="updateShelfPacks(${item.id}, this.value)" style="border-color:#c0392b;"></div><div class="count-row" style="font-size:9px;">= ${packsToCartons(item.shelf)} ctns</div></div></td>
           <td class="total-cell"><div class="total-packs">${totalPacks(item)} packs</div><div class="total-ctns">${packsToCartons(totalPacks(item))} ctns</div><div class="total-breakdown">📦 ${storageCartons} ctn + 🏪 ${item.shelf} pk</div></td>
-          <td><button onclick="removeItem(${item.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:16px;">✕</button></td>
-        </tr>
+          <td><button onclick="removeItem(${item.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:18px;" title="Remove">✕</button></td>
+         </tr>
       `;
     }).join('');
     
@@ -589,76 +651,109 @@ function printInventory() { window.print(); }
 function toggleAddForm() { document.getElementById('add-form').classList.toggle('open'); }
 function toggleBrand(header) { header.closest('.brand-section').classList.toggle('collapsed'); }
 
-// ========== SCANNER FUNCTIONS ==========
-let pendingEditItemId = null;
-let html5QrCode = null;
-
+// ========== IMPROVED SCANNER FUNCTIONS ==========
 function editSku(itemId) {
   pendingEditItemId = itemId;
-  document.getElementById('scannerModalTitle').innerText = '📸 Scan NEW Barcode for this item';
-  openScannerForEdit();
+  currentScannerAction = 'edit';
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan NEW Barcode for: ' + (inventory.find(i => i.id === itemId)?.name || 'Item');
+  openScanner();
 }
 
-function openScannerForEdit() {
+function openScannerToFind() {
+  currentScannerAction = 'find';
+  pendingEditItemId = null;
+  document.getElementById('scannerModalTitle').innerText = '📸 Scan Barcode to Find Item';
+  openScanner();
+}
+
+function openScanner() {
   const modal = document.getElementById('scannerModal');
   modal.style.display = 'flex';
   const readerElement = document.getElementById('qr-reader');
   if (readerElement) readerElement.innerHTML = '';
+  document.getElementById('scannerStatus').innerHTML = '🔍 Starting camera... Please allow camera access.';
+  
   if (typeof Html5Qrcode !== 'undefined') {
-    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
+    if (html5QrCode && html5QrCode.isScanning) {
+      try { html5QrCode.stop(); } catch(e) {}
+    }
     html5QrCode = new Html5Qrcode("qr-reader");
-    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, (decodedText) => {
-      if (pendingEditItemId !== null) {
-        const item = inventory.find(i => i.id === pendingEditItemId);
-        if (item) {
-          item.sku = decodedText;
-          renderInventory();
-          updateBrandFilter();
-          alert(`SKU updated to ${decodedText}`);
-        }
-        pendingEditItemId = null;
-      }
-      closeScanner();
-    }, (errorMessage) => { console.log("scan error"); });
+    
+    // Better scanner config for barcodes
+    const config = {
+      fps: 15,
+      qrbox: { width: 300, height: 200 },
+      aspectRatio: 1.0,
+      disableFlip: false,
+      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128, 
+                          Html5QrcodeSupportedFormats.CODE_39,
+                          Html5QrcodeSupportedFormats.EAN_13,
+                          Html5QrcodeSupportedFormans.EAN_8,
+                          Html5QrcodeSupportedFormats.UPC_A,
+                          Html5QrcodeSupportedFormats.UPC_E ]
+    };
+    
+    html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+      document.getElementById('scannerStatus').innerHTML = '✅ Scanned: ' + decodedText;
+      handleScannedValue(decodedText);
+    }, (errorMessage) => {
+      // Silent fail - just keep scanning
+      document.getElementById('scannerStatus').innerHTML = '🔍 Looking for barcode... Hold steady';
+    }).catch(err => {
+      document.getElementById('scannerStatus').innerHTML = '❌ Camera error: ' + err.message;
+    });
   } else {
-    alert("Scanner library loading... Please refresh and try again.");
+    document.getElementById('scannerStatus').innerHTML = '❌ Scanner library not loaded. Please refresh.';
+  }
+}
+
+function handleScannedValue(value) {
+  if (currentScannerAction === 'edit' && pendingEditItemId !== null) {
+    const item = inventory.find(i => i.id === pendingEditItemId);
+    if (item) {
+      item.sku = value;
+      renderInventory();
+      updateBrandFilter();
+      alert(`✅ SKU updated to ${value}`);
+    }
+    closeScanner();
+  } else if (currentScannerAction === 'find') {
+    jumpToSku(value);
     closeScanner();
   }
 }
 
-function openScannerToFind() {
-  pendingEditItemId = null;
-  document.getElementById('scannerModalTitle').innerText = '📸 Scan Barcode to Find Item';
-  const modal = document.getElementById('scannerModal');
-  modal.style.display = 'flex';
-  const readerElement = document.getElementById('qr-reader');
-  if (readerElement) readerElement.innerHTML = '';
-  if (typeof Html5Qrcode !== 'undefined') {
-    if (html5QrCode && html5QrCode.isScanning) try { html5QrCode.stop(); } catch(e) {}
-    html5QrCode = new Html5Qrcode("qr-reader");
-    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } }, (decodedText) => {
-      jumpToSku(decodedText);
-      closeScanner();
-    }, (errorMessage) => {});
-  } else {
-    alert("Scanner library loading... Please refresh.");
-    closeScanner();
+function submitManualSku() {
+  const manualInput = document.getElementById('manualSkuInput');
+  const value = manualInput.value.trim();
+  if (value) {
+    handleScannedValue(value);
+    manualInput.value = '';
   }
 }
 
 function closeScanner() {
   if (html5QrCode && html5QrCode.isScanning) {
-    html5QrCode.stop().then(() => { document.getElementById('scannerModal').style.display = 'none'; }).catch(()=>{});
+    html5QrCode.stop().then(() => {
+      document.getElementById('scannerModal').style.display = 'none';
+      document.getElementById('manualSkuInput').value = '';
+    }).catch(() => {
+      document.getElementById('scannerModal').style.display = 'none';
+    });
   } else {
     document.getElementById('scannerModal').style.display = 'none';
   }
+  currentScannerAction = null;
   pendingEditItemId = null;
 }
 
 function jumpToSku(scannedSku) {
   if (!scannedSku) return;
   const match = inventory.find(item => item.sku === scannedSku);
-  if (!match) { alert(`SKU "${scannedSku}" not found.`); return; }
+  if (!match) { 
+    alert(`SKU "${scannedSku}" not found.`); 
+    return; 
+  }
   const brandSection = document.querySelector(`.brand-section[data-brand="${match.brand}"]`);
   if (brandSection && brandSection.classList.contains('collapsed')) brandSection.classList.remove('collapsed');
   const targetRow = document.querySelector(`tr[data-sku="${match.sku}"]`);
@@ -669,11 +764,18 @@ function jumpToSku(scannedSku) {
   }
 }
 
-// Manual SKU jump
+// Manual SKU jump from top bar
 document.getElementById('barcode-scan').addEventListener('keypress', (e) => { 
-  if(e.key === 'Enter') { e.preventDefault(); jumpToSku(e.target.value.trim()); e.target.value = ''; } 
+  if(e.key === 'Enter') { 
+    e.preventDefault(); 
+    jumpToSku(e.target.value.trim()); 
+    e.target.value = ''; 
+  } 
 });
 document.getElementById('cameraScanBtn').addEventListener('click', openScannerToFind);
+document.getElementById('manualSkuInput').addEventListener('keypress', (e) => {
+  if(e.key === 'Enter') { submitManualSku(); }
+});
 
 // Initialize
 function init() {
