@@ -682,10 +682,12 @@ function openScanner() {
     // Better scanner config for barcodes
     const config = {
       fps: 15,
-      qrbox: { width: 300, height: 200 },
-      aspectRatio: 1.0,
+      qrbox: function(w, h) {
+        const side = Math.floor(Math.min(w, h) * 0.75);
+        return { width: side, height: Math.floor(side * 0.6) };
+      },
       disableFlip: false,
-      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128, 
+      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128,
                           Html5QrcodeSupportedFormats.CODE_39,
                           Html5QrcodeSupportedFormats.EAN_13,
                           Html5QrcodeSupportedFormats.EAN_8,
